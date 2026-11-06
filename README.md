@@ -29,7 +29,7 @@
 
 ## 为什么有这个项目
 
-[Channel Scope Studio] 是一款好用的荧光图排版软件，但它是 Microsoft Store 的 UWP 应用，在部分系统/地区无法安装。同时，科研制图中常需要在 Illustrator / Inkscape 里继续微调 ROI 框、标尺和通道标签，而普通拼图工具只能导出扁平位图。
+Channel Scope Studio 是一款好用的荧光图排版软件，但它是 Microsoft Store 的 UWP 应用，在部分系统/地区无法安装。同时，科研制图中常需要在 Illustrator / Inkscape 里继续微调 ROI 框、标尺和通道标签，而普通拼图工具只能导出扁平位图。
 
 FluoFigFactory 用「本地 Flask 服务 + 浏览器界面」实现同样的工作流，并且：
 
