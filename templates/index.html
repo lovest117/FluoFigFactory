@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FluoFigFactory - 显微荧光图像通道排版工具</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <!-- 顶部标题栏 -->
+    <header class="app-header">
+        <div class="header-left">
+            <span class="app-logo">🔬</span>
+            <h1>FluoFigFactory</h1>
+            <span class="version">v1.4.5 · FluoFigFactory</span>
+        </div>
+        <div class="header-right">
+            <!-- 导入组 -->
+            <div class="hdr-group" role="group" aria-label="导入">
+                <button id="btn-upload-single" class="btn btn-primary" onclick="triggerUploadSingle()" title="导入单张多通道 TIFF">
+                    <span class="hdr-ico">▤</span> 单图
+                </button>
+                <input type="file" id="file-input-single" accept=".tif,.tiff" hidden onchange="handleUploadSingle(event)">
+                <button id="btn-upload-multi" class="btn btn-primary" onclick="triggerUploadMulti()" title="分别选择各通道 TIFF">
+                    <span class="hdr-ico">▦</span> 多张
+                </button>
+                <input type="file" id="file-input-multi" accept=".tif,.tiff" hidden multiple onchange="handleUploadMulti(event)">
+                <span class="hdr-divider"></span>
+                <div class="upload-folder-group" title="在左侧『通道控制』面板调整通道数后导入文件夹">
+                    <button id="btn-upload-folder" class="btn btn-primary" onclick="triggerUploadFolder()" title="按左侧通道控制面板设置的通道数自动识别文件夹内图片">
+                        <span class="hdr-ico">▧</span> 文件夹
+                    </button>
+                    <input type="file" id="file-input-folder" accept=".tif,.tiff" hidden webkitdirectory multiple onchange="handleUploadFolder(event)">
+                </div>
+            </div>
+            <!-- 导出组 -->
+            <div class="hdr-group" role="group" aria-label="导出">
+                <button id="btn-export" class="btn btn-accent" onclick="showExportPanel()" disabled title="生成多面板排版图">
+                    <span class="hdr-ico">↧</span> 导出排版
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- 主体区域 -->
+    <main class="app-main">
+        <!-- 左侧面板：通道控制 -->
+        <aside class="sidebar sidebar-left">
+            <section class="panel" id="channel-panel">
+                <h3 class="panel-title" data-panel="channel-panel"><span class="collapse-arrow">▾</span><span class="title-text">通道控制</span><select id="ch-count-select" class="title-select" title="通道数 (1-4)：先选通道数再导入，导入后会按实际有信号的通道自动校正；免疫荧光 405/488/594/640" onchange="syncChannelCount()"><option value="1">1</option><option value="2">2</option><option value="3" selected>3</option><option value="4">4</option></select></h3>
+                <div class="panel-body">
+                    <div class="panel-body-tools">
+                        <button class="btn btn-sm" onclick="showChannelColorPicker()" title="手动为每个通道点选颜色 (自动识别不可靠时使用)">🎨 通道颜色</button>
+                    </div>
+                    <div id="empty-ch-hint" class="ch-hint" hidden>
+                        <span class="ch-hint-ico">ⓘ</span>
+                        <span id="empty-ch-hint-text"></span>
+                        <button class="btn-link" onclick="restoreEmptyChannels()" title="把被判定为无信号的通道放回列表">恢复</button>
+                    </div>
+                    <div id="channel-list" class="channel-list">
+                        <div class="empty-state">请先导入图像</div>
+                    </div>
+                    <datalist id="channel-name-history"></datalist>
+                </div>
+            </section>
+
+            <section class="panel" id="levels-panel">
+                <h3 class="panel-title" data-panel="levels-panel"><span class="collapse-arrow">▾</span>色阶调节 (Levels)</h3>
+                <div class="panel-body">
+                    <div id="levels-tabs" class="levels-tabs"></div>
+                    <canvas id="levels-histogram" class="levels-histogram"></canvas>
+                    <div id="levels-sliders" class="levels-sliders"></div>
+                    <div class="btn-row">
+                        <button class="btn btn-sm btn-ghost" onclick="resetActiveLevels()">重置当前通道</button>
+                    </div>
+                </div>
+            </section>
+
+            <section class="panel" id="scalebar-panel">
+                <h3 class="panel-title" data-panel="scalebar-panel"><span class="collapse-arrow">▾</span>Scale Bar 设置</h3>
+                <div class="panel-body">
+                    <div class="form-grid-2">
+                        <div class="form-group">
+                            <label>长度 (μm)</label>
+                            <input type="number" id="scalebar-length" value="50" min="1" step="1">
+                        </div>
+                        <div class="form-group">
+                            <label>位置</label>
+                            <select id="scalebar-position">
+                                <option value="bottom-right">右下角</option>
+                                <option value="bottom-left">左下角</option>
+                                <option value="top-right">右上角</option>
+                                <option value="top-left">左上角</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>颜色</label>
+                            <select id="scalebar-color">
+                                <option value="white">白色</option>
+                                <option value="black">黑色</option>
+                                <option value="gray">灰色</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>线宽 (pt, Illustrator 习惯默认 1pt)</label>
+                            <input type="number" id="scalebar-thickness" value="1" min="0.5" max="10" step="0.5">
+                        </div>
+                    </div>
+                    <div class="form-group" style="margin-top:6px">
+                        <label>字号 — <span style="font-weight:normal;color:#888">默认自动 (与 bar 长度成比例); 可切手动</span></label>
+                        <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+                            <label style="font-size:12px"><input type="radio" name="scalebar-font-mode" value="auto" checked onchange="onFontSizeModeChange()"> 自动</label>
+                            <label style="font-size:12px"><input type="radio" name="scalebar-font-mode" value="manual" onchange="onFontSizeModeChange()"> 手动</label>
+                            <input type="number" id="scalebar-font-size" value="12" min="6" max="48" step="1" style="width:80px;display:none" disabled>
+                            <span id="scalebar-font-readout" class="hint-text" style="font-size:11px">自动 ≈ bar 长度 × 0.3</span>
+                        </div>
+                    </div>
+                    <div class="form-group" style="margin-top:6px">
+                        <label>物镜倍数 (×) + Zoom — 输入后自动防抖同步</label>
+                        <div style="display:flex;gap:6px;align-items:center">
+                            <input type="number" id="scalebar-mag" placeholder="10 / 20 / 40" min="1" max="40" step="1" style="flex:1" oninput="onMagnificationChange()">
+                            <input type="number" id="scalebar-zoom" value="1" min="0.1" max="20" step="0.1" style="width:80px" title="FV3000 数字 zoom (默认 1.0, 大于 1 会缩小 FOV)" oninput="onMagnificationChange()">
+                        </div>
+                        <span class="hint-text" id="scalebar-mag-readout">填写后自动换算 1 px = ? μm (Olympus FV3000 UPLXAPO 标定, FOV_10×=1272.792μm)</span>
+                    </div>
+                    <div class="form-group" id="scalebar-filename-suggestions" style="display:none;margin-top:6px">
+                        <label>文件名识别结果 — <span style="font-weight:normal;color:#888">可一键应用到通道/倍数</span></label>
+                        <div id="scalebar-filename-content" style="background:#f5f7fa;padding:6px;border-radius:4px;font-size:12px"></div>
+                        <div style="margin-top:4px">
+                            <button class="btn btn-sm" onclick="applyFilenameSuggestions()">应用识别结果</button>
+                            <button class="btn btn-sm btn-ghost" onclick="dismissFilenameSuggestions()">忽略</button>
+                        </div>
+                    </div>
+                    <div class="btn-row">
+                        <button class="btn btn-sm" onclick="applyScaleBar()">应用</button>
+                        <button class="btn btn-sm btn-ghost" onclick="removeScaleBar()">移除</button>
+                    </div>
+                </div>
+            </section>
+
+            <section class="panel" id="pixel-info-panel">
+                <h3 class="panel-title" data-panel="pixel-info-panel"><span class="collapse-arrow">▾</span>图像信息</h3>
+                <div class="panel-body">
+                    <div id="pixel-info-content" class="info-content">
+                        <span class="empty-state">未加载图像</span>
+                    </div>
+                </div>
+            </section>
+        </aside>
+
+        <!-- 中央画布区域 -->
+        <div class="canvas-area">
+            <div class="canvas-toolbar">
+                <div class="toolbar-group">
+                    <label>视图:</label>
+                    <button class="btn btn-sm btn-active" id="view-merge" onclick="setViewMode('merge')">合并</button>
+                    <button class="btn btn-sm" id="view-single" onclick="setViewMode('single')">单通道</button>
+                    <button class="btn btn-sm" id="view-grid" onclick="setViewMode('grid')" title="将所有通道平铺对比">网格</button>
+                </div>
+                <div class="toolbar-group">
+                    <label>显示:</label>
+                    <button class="btn btn-sm btn-active" id="view-colormode" onclick="toggleDisplayMode()" title="切换伪彩色 / 原始灰度">彩色</button>
+                </div>
+                <div class="toolbar-group">
+                    <label>工具:</label>
+                    <button class="btn btn-sm tool-btn active" id="tool-pan" data-tool="pan" onclick="setTool('pan')" title="移动 (P)">↕ 移动</button>
+                    <button class="btn btn-sm tool-btn" id="tool-roi" data-tool="roi" onclick="setTool('roi')" title="ROI (R)">◧ ROI</button>
+                    <button class="btn btn-sm tool-btn" id="tool-inset" data-tool="inset" onclick="setTool('inset')" title="Inset (I)">🔍 Inset</button>
+                    <button class="btn btn-sm tool-btn" id="tool-line" data-tool="line" onclick="setTool('line')" title="Line (L)">/ Line</button>
+                </div>
+                <div class="toolbar-group">
+                    <button class="btn btn-sm" onclick="clearROI()">清除 ROI</button>
+                    <button class="btn btn-sm" onclick="clearLine()">清除 Line</button>
+                </div>
+                <div class="toolbar-group">
+                    <button class="btn btn-sm" onclick="zoomIn()">🔍+</button>
+                    <button class="btn btn-sm" onclick="zoomOut()">🔍-</button>
+                    <button class="btn btn-sm" onclick="zoomFit()">适配</button>
+                    <span id="zoom-level">100%</span>
+                </div>
+            </div>
+            <div class="canvas-container" id="canvas-container">
+                <canvas id="main-canvas"></canvas>
+                <div class="canvas-overlay" id="canvas-overlay"></div>
+                <div class="empty-canvas" id="empty-canvas">
+                    <div class="empty-icon">🔬</div>
+                    <p>导入多通道荧光 TIFF 图像开始工作</p>
+                    <p class="hint">单图：405/488/561/640nm 多通道 TIFF</p>
+                    <p class="hint">多图：分别选择 DAPI/GFP/RFP/Cy5 文件</p>
+                    <p class="hint">RGB Merge：自动拆分为 R/G/B 三通道</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- 右侧面板：分析与导出 -->
+        <aside class="sidebar sidebar-right">
+            <section class="panel" id="analysis-panel">
+                <h3 class="panel-title" data-panel="analysis-panel"><span class="collapse-arrow">▾</span>分析工具</h3>
+                <div class="panel-body">
+                <div class="analysis-tabs">
+                    <button class="tab-btn active" onclick="switchAnalysisTab('line')">Line Profile</button>
+                    <button class="tab-btn" onclick="switchAnalysisTab('pearson')">Pearson 相关</button>
+                </div>
+
+                <div id="line-profile-section" class="analysis-section">
+                    <div class="form-group">
+                        <label>选择通道:</label>
+                        <div id="line-ch-select" class="channel-select"></div>
+                    </div>
+                    <div class="line-info" id="line-info">
+                        <span class="empty-state">在画布上点击两点绘制线</span>
+                    </div>
+                    <div id="line-profile-chart" class="chart-area"></div>
+                </div>
+
+                <div id="pearson-section" class="analysis-section hidden">
+                    <div class="form-group">
+                        <label>通道 1:</label>
+                        <select id="pearson-ch1"></select>
+                    </div>
+                    <div class="form-group">
+                        <label>通道 2:</label>
+                        <select id="pearson-ch2"></select>
+                    </div>
+                    <div class="form-group">
+                        <label>区域:</label>
+                        <select id="pearson-region">
+                            <option value="whole">全图</option>
+                            <option value="roi">ROI 区域</option>
+                        </select>
+                    </div>
+                    <button class="btn btn-sm" onclick="calculatePearson()">计算</button>
+                    <div id="pearson-result" class="result-box"></div>
+                </div>
+                </div>
+            </section>
+
+            <section class="panel" id="roi-panel">
+                <h3 class="panel-title" data-panel="roi-panel"><span class="collapse-arrow">▾</span>ROI / Inset</h3>
+                <div class="panel-body">
+                <div id="roi-info" class="roi-info">
+                    <span class="empty-state">使用 ROI 工具在画布上框选，或在下方输入精确尺寸</span>
+                </div>
+
+                <div style="font-size:12px;font-weight:600;color:#3498db;margin-top:8px">ROI 区域尺寸 / 位置（px）</div>
+                <div class="form-row">
+                    <div class="form-group half">
+                        <label>X (px)</label>
+                        <input type="number" id="roi-x" value="0" min="0" step="1" onchange="applyROIDims()">
+                    </div>
+                    <div class="form-group half">
+                        <label>Y (px)</label>
+                        <input type="number" id="roi-y" value="0" min="0" step="1" onchange="applyROIDims()">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group half">
+                        <label>宽 W (px)</label>
+                        <input type="number" id="roi-w" value="100" min="1" step="1" onchange="applyROIDims()">
+                    </div>
+                    <div class="form-group half">
+                        <label>高 H (px)</label>
+                        <input type="number" id="roi-h" value="100" min="1" step="1" onchange="applyROIDims()">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>ROI 框线颜色</label>
+                    <input type="color" id="roi-color" value="#ffffff" onchange="renderMainCanvas(); updateExportPanels()">
+                </div>
+                <div class="btn-row">
+                    <button class="btn btn-sm" onclick="centerROI()">置于中心</button>
+                    <label class="checkbox-label" style="margin:0"><input type="checkbox" id="roi-fixed" onchange="toggleFixedROI()"> 固定尺寸点击放置</label>
+                </div>
+                <div class="inset-hint" style="margin-top:4px">勾选"固定尺寸"后点击画布即用上方 W×H 放置；不勾选可自由框选，也可直接修改 W/H 精调大小</div>
+
+                <div class="form-group" style="margin-top:10px">
+                    <label class="checkbox-label"><input type="checkbox" id="inset-enabled" checked onchange="renderMainCanvas()"> 启用右上角放大 (Inset)</label>
+                </div>
+                <div class="form-group">
+                    <label>放大倍数</label>
+                    <input type="number" id="inset-zoom" value="2.0" min="0.5" step="0.1" onchange="renderMainCanvas()">
+                    <span class="inset-hint">放大框尺寸 = ROI 尺寸 × 倍数，改动即实时预览</span>
+                </div>
+                <div class="form-group">
+                    <label>位置</label>
+                    <select id="inset-position" onchange="renderMainCanvas()">
+                        <option value="top-right">右上角</option>
+                        <option value="top-left">左上角</option>
+                        <option value="bottom-right">右下角</option>
+                        <option value="bottom-left">左下角</option>
+                    </select>
+                </div>
+
+                <div class="inset-preview-wrap">
+                    <label>放大预览</label>
+                    <canvas id="inset-preview-canvas" width="160" height="160"></canvas>
+                </div>
+
+                <div class="btn-row">
+                    <button class="btn btn-sm" onclick="previewROI()" disabled id="btn-roi-preview">预览 ROI</button>
+                    <button class="btn btn-sm" onclick="setROIAsInset()" id="btn-set-inset" disabled>用作 Inset</button>
+                </div>
+                </div>
+            </section>
+
+            <section class="panel" id="export-panel">
+                <h3 class="panel-title" data-panel="export-panel"><span class="collapse-arrow">▾</span>导出设置</h3>
+                <div class="panel-body">
+                <div class="form-group">
+                    <label>DPI</label>
+                    <input type="number" id="export-dpi" value="300" min="72" max="600">
+                </div>
+                <div class="form-group">
+                    <label title="勾选: 面板像素尺寸 = 导入原图尺寸, 不重采样, 保真度最高。&#10;取消: 压缩到 8.5cm 单栏排版宽度 (文件更小, 但会降采样)">原始分辨率 1:1</label>
+                    <input type="checkbox" id="export-native-size" checked onchange="buildGridPreview()">
+                </div>
+                <div class="form-group">
+                    <label>格式</label>
+                    <select id="export-format">
+                        <option value="png">PNG (无损)</option>
+                        <option value="tiff">TIFF (无损)</option>
+                        <option value="jpg">JPEG (有损)</option>
+                        <option value="svg">SVG (矢量, 可编辑)</option>
+                        <option value="pdf">PDF (矢量, 可编辑)</option>
+                    </select>
+                </div>
+                <div class="form-group" id="svg-display-group">
+                    <label title="SVG 在 Illustrator 打开时的默认画布尺寸。100pt 适配 AI 编辑 (画布不会巨大); 选「原始尺寸」则按原生像素打开 (画布=原图边长 pt, 但可直接按原分辨率编辑)。两种模式底图都无损嵌入原生分辨率, 像素零丢失, 可随时重新导出。">SVG 默认显示尺寸</label>
+                    <select id="export-svg-display">
+                        <option value="100" selected>100pt (AI 友好)</option>
+                        <option value="0">原始尺寸 (原生像素)</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>布局</label>
+                    <select id="export-layout" onchange="buildGridPreview()">
+                        <option value="auto" selected>自动 (单行优先)</option>
+                        <option value="1xn">单行 (1 × N)</option>
+                        <option value="2col">2 列 (2 × N, 如 2×2)</option>
+                        <option value="3col">3 列 (3 × N, 如 3×3)</option>
+                        <option value="4col">4 列 (4 × N)</option>
+                        <option value="merge_left">Merge 大图 + 通道竖排右</option>
+                    </select>
+                    <div id="layout-preview" class="layout-preview"></div>
+                </div>
+                <div class="form-group">
+                    <label>面板 (可取消勾选)</label>
+                    <div id="export-panels" class="panel-select"></div>
+                </div>
+                <div class="form-group">
+                    <label>标签样式</label>
+                    <select id="export-labels" onchange="buildGridPreview()">
+                        <option value="letter">字母 A/B/C... (顶部斜杠, 黑色, 居中)</option>
+                        <option value="name">通道名 (顶部斜杠, 按通道色, 居中)</option>
+                        <option value="short" selected>G/R/B/Merge (顶部斜杠, 按通道色, 左对齐)</option>
+                        <option value="none">无标签</option>
+                    </select>
+                </div>
+                <details class="adv-group">
+                    <summary>高级排版 (字号 / 间距 / 边距)</summary>
+                    <div class="adv-grid">
+                        <div class="form-group adv-item">
+                            <label>标签字号 (px)</label>
+                            <input type="number" id="export-font-size" min="0" max="80" placeholder="自动">
+                        </div>
+                        <div class="form-group adv-item">
+                            <label>面板间距 (px)</label>
+                            <input type="number" id="export-gap" min="0" max="100" placeholder="自动">
+                        </div>
+                        <div class="form-group adv-item">
+                            <label>外边距 (px)</label>
+                            <input type="number" id="export-margin" min="0" max="100" value="10">
+                        </div>
+                    </div>
+                </details>
+                <div class="form-group">
+                    <label>包含 Scale Bar</label>
+                    <input type="checkbox" id="export-scalebar" checked>
+                </div>
+                <div class="form-group">
+                    <label>包含 Pearson r</label>
+                    <input type="checkbox" id="export-pearson">
+                </div>
+                <div class="btn-row">
+                    <button class="btn btn-accent" onclick="exportLayout()">导出排版图</button>
+                    <button class="btn btn-sm" onclick="exportSingle('merge')">仅 Merge</button>
+                </div>
+                </div>
+            </section>
+        </aside>
+    </main>
+
+    <!-- 状态栏 -->
+    <footer class="status-bar">
+        <span id="status-text">就绪</span>
+        <span id="cursor-pos">--</span>
+    </footer>
+
+    <!-- 通道颜色点选模态框 (自动识别不可靠时弹出) -->
+    <div id="channel-color-modal" class="error-modal" style="display:none">
+        <div class="error-content" style="max-width:560px">
+            <div class="error-title" style="color:var(--accent-blue)">通道颜色设置</div>
+            <div class="error-detail">未能可靠识别部分通道颜色（或你想校正），可同时修改通道名与点选颜色，点选/回车即生效：</div>
+            <div id="color-picker-list"></div>
+            <div class="btn-row" style="margin-top:16px">
+                <button class="btn btn-accent" onclick="closeChannelColorPicker()">完成</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/js/main.js"></script>
+</body>
+</html>

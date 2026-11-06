@@ -1,0 +1,57 @@
+# ============================================================
+#  FluoFigFactory - Git ignore
+# ============================================================
+
+# ---------- Python ----------
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+env/
+ENV/
+*.egg-info/
+.eggs/
+.pytest_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# ---------- 构建产物 ----------
+build/
+dist/
+*.spec.bak
+*.manifest
+
+# ---------- 运行时数据 ----------
+uploads/
+video_frames/
+_e2e_out/
+tests/_tmp/
+*.log
+
+# ---------- 用户数据 / 大文件 ----------
+# 示例与标定用 TIFF 体积较大（单张 2–24 MB），不入库；
+# 需要测试数据请用 tests/ 内脚本生成的合成图像。
+*.tif
+*.tiff
+*.nd2
+*.czi
+*.lsm
+*.zip
+软著材料/
+bar_measured.png
+bar_preview.png
+
+# ---------- 个人本地脚本（含本机绝对路径） ----------
+启动.bat
+
+# ---------- 系统 / 编辑器 ----------
+Thumbs.db
+desktop.ini
+.DS_Store
+.vscode/
+.idea/
+*.swp

@@ -1,0 +1,13 @@
+# FluoFigFactory 运行依赖
+# Python 3.10+ (开发与打包使用 3.13)
+#
+# 注意: imagecodecs 是必需依赖，不可省略。
+#       缺少它时 tifffile 无法解码 Olympus FV3000 默认的 LZW 压缩 TIFF，
+#       所有 TIFF 都会读取失败并提示「无有效页面」。
+
+flask>=3.0
+numpy>=1.26
+pillow>=10.0
+tifffile>=2024.1.14
+imagecodecs>=2024.1.1
+reportlab>=4.0
