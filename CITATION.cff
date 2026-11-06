@@ -1,0 +1,25 @@
+cff-version: 1.2.0
+message: >-
+  如果你在研究中使用了 FluoFigFactory，请引用本项目。
+  If you use FluoFigFactory in your research, please cite this software.
+title: FluoFigFactory
+authors:
+  - alias: lovest117
+    website: 'https://github.com/lovest117'
+version: 1.4.5
+date-released: '2026-09-18'
+license: MIT
+repository-code: 'https://github.com/lovest117/FluoFigFactory'
+abstract: >-
+  FluoFigFactory is a free, open-source tool for composing multi-channel
+  fluorescence microscopy images into publication-ready figures. It supports
+  TIFF import (including Olympus FV3000 LZW), channel management, scale bars,
+  ROI/insets, line profiles and Pearson colocalization, and exports structured
+  SVG/PDF where the base image, scale bar, ROI, inset and panel labels remain
+  separately editable objects.
+keywords:
+  - fluorescence-microscopy
+  - microscopy
+  - scientific-figures
+  - image-processing
+  - tiff

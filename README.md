@@ -4,6 +4,7 @@
 
 [![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![Flask](https://img.shields.io/badge/Flask-3.x-000000?logo=flask&logoColor=white)](https://flask.palletsprojects.com/)
+[![CI](https://github.com/lovest117/FluoFigFactory/actions/workflows/ci.yml/badge.svg)](https://github.com/lovest117/FluoFigFactory/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Version](https://img.shields.io/badge/version-1.4.5-blue.svg)](#)
 
@@ -238,6 +239,22 @@ A：可以。底图、ROI、标尺、Inset、面板标签分别是独立图层/�
 ## 贡献
 
 欢迎提交 Issue 反馈问题（请附：显微镜型号、文件格式、复现步骤、期望结果 vs 实际结果）。Pull Request 请保持现有测试通过。
+
+## 引用
+
+如果本项目对你的研究有帮助，欢迎引用：
+
+```bibtex
+@software{lovest117_FluoFigFactory,
+  author       = {lovest117},
+  title        = {FluoFigFactory},
+  year         = {2025},
+  howpublished = {\url{https://github.com/lovest117/FluoFigFactory}},
+  note         = {多通道荧光显微图像排版与发表级导出工具}
+}
+```
+
+引用元数据见 [`CITATION.cff`](CITATION.cff)，GitHub 会自动据此生成「Cite this repository」。
 
 ## 许可证
 
