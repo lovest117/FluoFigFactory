@@ -126,7 +126,7 @@ def test_health_version():
     r = client.get('/api/health')
     assert r.status_code == 200
     body = r.get_json()
-    assert body['version'] == '1.4.5', f"got {body['version']}"
+    assert body['version'] == '1.4.6', f"got {body['version']}"
 
 
 if __name__ == '__main__':

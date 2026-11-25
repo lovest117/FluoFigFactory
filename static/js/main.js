@@ -344,6 +344,7 @@ function renderChannelList() {
         const item = document.createElement('div');
         // 注意: 不能用全局 '.hidden' (CSS:607 display:none !important), 否则整个通道项会消失无法再点选
         item.className = 'channel-item' + (APP.activeChannel === i ? ' active' : '') + (config.visible ? '' : ' dimmed');
+        item.dataset.ch = String(i);
         item.onclick = (e) => {
             if (e.target.tagName === 'INPUT' || e.target.classList.contains('channel-toggle') || e.target.classList.contains('channel-color-dot') || e.target.classList.contains('channel-drag-handle')) return;
             setActiveChannel(i);
@@ -423,8 +424,166 @@ function renderChannelList() {
         item.appendChild(handle);
         item.appendChild(dot);
         item.appendChild(name);
+        item.appendChild(buildChannelInlineLevels(i));
         list.appendChild(item);
     });
+    updateStatusBar();
+}
+
+// ======== 通道卡片内联 亮度/对比度 ========
+// 与「色阶调节」面板共享 black/white 同一份数据，双向同步。
+// 亮度 brightness = (127.5 - 窗口中心) / 1.275，范围 -100..100，0 为不动
+// 对比度 contrast   = 25500 / 窗口宽度，范围 10..300，100 为满量程
+function levelsToBrightContrast(cfg) {
+    const black = (cfg && cfg.black != null) ? cfg.black : 0;
+    const white = (cfg && cfg.white != null) ? cfg.white : 255;
+    const width = Math.max(1, white - black);
+    const center = (black + white) / 2;
+    const contrast = Math.round(25500 / width);
+    const brightness = Math.round((127.5 - center) / 1.275);
+    return {
+        brightness: Math.max(-100, Math.min(100, brightness)),
+        contrast: Math.max(10, Math.min(300, contrast))
+    };
+}
+
+function brightContrastToLevels(brightness, contrast) {
+    // 亮度优先：窗口中心下移(提亮)时必须留出平移空间，故按偏移量收窄可用宽度
+    const offset = Math.abs(brightness) * 1.275;
+    const maxWidth = Math.max(2, 255 - 2 * offset);
+    let width = Math.min(25500 / Math.max(10, contrast), maxWidth);
+    width = Math.max(2, width);
+    const center = 127.5 - brightness * 1.275;
+    let black = center - width / 2;
+    let white = center + width / 2;
+    // 出界时整体平移，保持窗口宽度不变
+    if (black < 0) { white -= black; black = 0; }
+    if (white > 255) { black -= (white - 255); white = 255; }
+    black = Math.max(0, Math.min(254, Math.round(black)));
+    white = Math.max(black + 1, Math.min(255, Math.round(white)));
+    return { black, white };
+}
+
+function buildChannelInlineLevels(i) {
+    const wrap = document.createElement('div');
+    wrap.className = 'channel-levels';
+
+    const mk = (label, cls, min, max, step, val, fmt) => {
+        const row = document.createElement('div');
+        row.className = 'level-row';
+        const lab = document.createElement('span');
+        lab.className = 'level-label';
+        lab.textContent = label;
+        const sl = document.createElement('input');
+        sl.type = 'range';
+        sl.className = cls;
+        sl.min = min; sl.max = max; sl.step = step; sl.value = val;
+        sl.title = label + '：双击归零 / 恢复 100%';
+        const num = document.createElement('span');
+        num.className = 'level-val';
+        num.textContent = fmt(parseFloat(val));
+        row.appendChild(lab); row.appendChild(sl); row.appendChild(num);
+        wrap.appendChild(row);
+        return { row, sl, num };
+    };
+
+    const bc = levelsToBrightContrast(APP.configs[i]);
+    const bri = mk('亮度', 'ch-bri', -100, 100, 1, bc.brightness,
+        v => (v > 0 ? '+' : '') + Math.round(v));
+    const con = mk('对比度', 'ch-con', 10, 300, 1, bc.contrast,
+        v => Math.round(v) + '%');
+
+    const apply = (fromBrightness) => {
+        const cfg = APP.configs[i];
+        if (!cfg) return;
+        const cur = levelsToBrightContrast(cfg);
+        const b = fromBrightness ? parseInt(bri.sl.value, 10) : cur.brightness;
+        const c = fromBrightness ? cur.contrast : parseInt(con.sl.value, 10);
+        const lv = brightContrastToLevels(b, c);
+        cfg.black = lv.black;
+        cfg.white = lv.white;
+        const shown = levelsToBrightContrast(cfg);
+        bri.sl.value = shown.brightness;
+        con.sl.value = shown.contrast;
+        bri.num.textContent = (shown.brightness > 0 ? '+' : '') + shown.brightness;
+        con.num.textContent = shown.contrast + '%';
+        debouncedUpdateParam(i, 'black', lv.black);
+        debouncedUpdateParam(i, 'white', lv.white);
+        syncLevelsPanel(i);
+    };
+
+    bri.sl.addEventListener('input', () => apply(true));
+    con.sl.addEventListener('input', () => apply(false));
+    // 双击复位：亮度归零 / 对比度回 100%
+    bri.sl.addEventListener('dblclick', () => { bri.sl.value = 0; apply(true); });
+    con.sl.addEventListener('dblclick', () => { con.sl.value = 100; apply(false); });
+
+    return wrap;
+}
+
+// 通道卡片 → 色阶面板 单向刷新（供滑块拖动时调用）
+function syncLevelsPanel(i) {
+    if (APP.activeChannel !== i) return;
+    const box = document.getElementById('levels-sliders');
+    if (!box || !APP.configs[i]) return;
+    const setRow = (cls, val, fmt) => {
+        const sl = box.querySelector('.' + cls);
+        if (!sl) return;
+        sl.value = val;
+        const num = sl.parentElement.querySelector('.level-val');
+        if (num) num.textContent = fmt(val);
+    };
+    setRow('ch-black', APP.configs[i].black ?? 0, v => String(Math.round(v)));
+    setRow('ch-white', APP.configs[i].white ?? 255, v => String(Math.round(v)));
+}
+
+// 色阶面板 → 通道卡片 反向刷新
+function syncChannelInlineLevels(i) {
+    const item = document.querySelector('.channel-item[data-ch="' + i + '"]');
+    if (!item || !APP.configs[i]) return;
+    const bc = levelsToBrightContrast(APP.configs[i]);
+    const bri = item.querySelector('.ch-bri');
+    const con = item.querySelector('.ch-con');
+    if (bri) {
+        bri.value = bc.brightness;
+        const n = bri.parentElement.querySelector('.level-val');
+        if (n) n.textContent = (bc.brightness > 0 ? '+' : '') + bc.brightness;
+    }
+    if (con) {
+        con.value = bc.contrast;
+        const n = con.parentElement.querySelector('.level-val');
+        if (n) n.textContent = bc.contrast + '%';
+    }
+}
+
+// ======== 状态栏：常驻坐标 / 缩放 / 通道状态 ========
+function _escHtml(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, c => (
+        { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
+    ));
+}
+
+function updateStatusBar() {
+    const zl = document.getElementById('zoom-level');
+    const zp = document.getElementById('zoom-pos');
+    const pct = Math.round((APP.zoom || 1) * 100);
+    if (zl) zl.textContent = pct + '%';
+    if (zp) zp.innerHTML = 'Zoom <b>' + pct + '%</b>';
+
+    const box = document.getElementById('status-channels');
+    if (!box) return;
+    const n = APP.activeCount || (APP.configs ? APP.configs.length : 0);
+    if (!n || !APP.configs || !APP.configs.length) { box.innerHTML = ''; return; }
+    const parts = [];
+    APP.configs.slice(0, n).forEach((c, i) => {
+        const cls = 'st-ch' + (c.visible ? '' : ' off');
+        parts.push(
+            '<span class="' + cls + '" title="' + _escHtml(c.name) + (c.visible ? '' : '（已隐藏）') + '">' +
+            '<span class="st-ch-dot" style="background:' + _escHtml(c.color || '#888') + '"></span>' +
+            _escHtml(shortCode(c.name)) + '</span>'
+        );
+    });
+    box.innerHTML = parts.join('<span class="st-sep"></span>');
 }
 
 // ======== 色阶调节面板 (PS 式: 标签切换 + 直方图 + 共享滑块) ========
@@ -503,6 +662,7 @@ function renderLevelsSliders() {
         APP.configs[i].black = v;
         drawLevelsHistogram();
         debouncedUpdateParam(i, 'black', v);
+        syncChannelInlineLevels(i);
     });
 
     const wh = mkRow('白点', 'ch-white', 0, 255, 1, white0, v => String(Math.round(v)));
@@ -512,6 +672,7 @@ function renderLevelsSliders() {
         APP.configs[i].white = v;
         drawLevelsHistogram();
         debouncedUpdateParam(i, 'white', v);
+        syncChannelInlineLevels(i);
     });
 
     const gm = mkRow('γ', 'ch-gamma', 0.1, 5, 0.1, gamma0, v => v.toFixed(1));
@@ -1285,7 +1446,7 @@ function updateInsetPreview() {
 }
 
 function updateZoomDisplay() {
-    document.getElementById('zoom-level').textContent = Math.round(APP.zoom * 100) + '%';
+    updateStatusBar();
 }
 
 // ======== 视图/工具 ========
@@ -1528,7 +1689,7 @@ canvas.addEventListener('mousemove', (e) => {
     const my = e.clientY - rect.top;
     const imgCoord = canvasToImage(mx, my);
     if (imgCoord) {
-        document.getElementById('cursor-pos').textContent = `X: ${Math.round(imgCoord.x)} Y: ${Math.round(imgCoord.y)}`;
+        document.getElementById('cursor-pos').textContent = `X ${Math.round(imgCoord.x)} · Y ${Math.round(imgCoord.y)}`;
     }
     if (!APP.isDragging) {
         if (APP.tool === 'roi') updateROICursor(mx, my);
@@ -1637,7 +1798,7 @@ canvas.addEventListener('wheel', (e) => {
         x: (cx - imgX * APP.zoom) - (contW - dw2) / 2,
         y: (cy - imgY * APP.zoom) - (contH - dh2) / 2
     };
-    document.getElementById('zoom-level').textContent = Math.round(APP.zoom * 100) + '%';
+    updateStatusBar();
     renderMainCanvas();
 });
 
@@ -2519,6 +2680,52 @@ function initPanelCollapse() {
     }
 }
 initPanelCollapse();
+
+// ============ 高级参数：一键收起 / 展开全部面板 ============
+function toggleAdvancedParams() {
+    const btn = document.getElementById('btn-adv-toggle');
+    const label = document.getElementById('btn-adv-label');
+    if (!btn) return;
+    const willCollapse = btn.getAttribute('aria-pressed') !== 'true';
+    document.querySelectorAll('.panel').forEach(p => {
+        p.classList.toggle('collapsed', willCollapse);
+    });
+    btn.setAttribute('aria-pressed', willCollapse ? 'true' : 'false');
+    if (label) label.textContent = willCollapse ? '展开参数' : '高级参数';
+    // 与 initPanelCollapse 共用同一存储键，刷新后状态一致
+    const state = {};
+    if (willCollapse) {
+        document.querySelectorAll('.panel-title[data-panel]').forEach(t => {
+            state[t.getAttribute('data-panel')] = true;
+        });
+    }
+    try { localStorage.setItem('ms_panel_collapsed', JSON.stringify(state)); } catch (e) {}
+    if (!willCollapse) setTimeout(() => { try { drawLevelsHistogram(); } catch (e) {} }, 0);
+    // 侧栏宽度变化后重绘画布（保持当前缩放，仅重新居中）
+    setTimeout(() => { window.dispatchEvent(new Event('resize')); }, 80);
+}
+
+// 窗口 / 面板尺寸变化时重绘（不改变用户当前缩放）
+(function bindResizeRedraw() {
+    let timer = null;
+    window.addEventListener('resize', () => {
+        clearTimeout(timer);
+        timer = setTimeout(() => { try { renderMainCanvas(); } catch (e) {} }, 120);
+    });
+})();
+
+// 首屏同步开关状态（若上次是全收起）
+(function syncAdvToggleState() {
+    const btn = document.getElementById('btn-adv-toggle');
+    const label = document.getElementById('btn-adv-label');
+    if (!btn) return;
+    const panels = Array.from(document.querySelectorAll('.panel'));
+    const allCollapsed = panels.length > 0 && panels.every(p => p.classList.contains('collapsed'));
+    btn.setAttribute('aria-pressed', allCollapsed ? 'true' : 'false');
+    if (label) label.textContent = allCollapsed ? '展开参数' : '高级参数';
+})();
+
 syncDisplayModeBtn();   // 恢复上次的彩色/灰度显示偏好
+updateStatusBar();
 refreshChannelNameDatalist();
 refreshChCountSelect();

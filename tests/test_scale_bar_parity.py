@@ -7,7 +7,7 @@ import sys, os, io, json, base64, re
 import numpy as np
 from PIL import Image
 
-ROOT = r'D:\Apps\WorkBuddy_Workspace\2026-07-18-16-08-00\MicroScopeStudio'
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 import app as appmod
 

@@ -6,7 +6,7 @@
 [![Flask](https://img.shields.io/badge/Flask-3.x-000000?logo=flask&logoColor=white)](https://flask.palletsprojects.com/)
 [![CI](https://github.com/lovest117/FluoFigFactory/actions/workflows/ci.yml/badge.svg)](https://github.com/lovest117/FluoFigFactory/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-1.4.5-blue.svg)](#)
+[![Version](https://img.shields.io/badge/version-1.4.6-blue.svg)](#)
 
 ![FluoFigFactory 导出效果](docs/preview.png)
 
@@ -169,6 +169,7 @@ FluoFigFactory/
 │   ├── test_filename_parser.py
 │   ├── test_magnification.py
 │   ├── test_scale_bar_parity.py
+│   ├── test_session_budget.py
 │   └── test_channel_mapping.mjs
 ├── tools/
 │   └── make_preview.py     # 生成 README 预览图（合成数据）
@@ -225,12 +226,16 @@ A：设置环境变量 `PORT`，例如 `set PORT=5001` 后再启动。
 **Q：导入 4 个文件，界面只显示 3 个通道**
 A：全黑/无信号的通道会被自动剔除。点「恢复空通道」可以找回。
 
+**Q：连续导入多组大图后提示「会话不存在」**
+A：会话数据保存在内存中，默认预算 1536 MB；超预算时按「最久未访问」淘汰旧会话，当前会话永不淘汰。可用环境变量 `FLUOFIG_SESSION_BUDGET_MB` 调整（例如 4096）。导出使用会话快照，渲染期间不会阻塞其它操作。
+
 **Q：导出的 SVG 在 Illustrator 里能编辑吗？**
 A：可以。底图、ROI、标尺、Inset、面板标签分别是独立图层/对象，可单独选中、移动、改色。
 
 ## 已知限制
 
 - 仅支持 TIFF / TIF，暂不支持 ND2、CZI、LSM
+- 会话数据只存在内存中，重启后需重新导入；默认内存预算 1536 MB，超出时淘汰最久未使用的会话
 - 物镜仅开放 10× / 20× / 40×（60×、100× 未验证）
 - 通道识别针对 405 / 488 / 561 / 594 / 640 nm 常见免疫荧光通道优化
 - `Merge 左大图 + 通道竖排` 布局的结构化导出暂无面板标签

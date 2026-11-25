@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>FluoFigFactory - 显微荧光图像通道排版工具</title>
+    <link rel="icon" href="data:,">
     <link rel="stylesheet" href="/static/css/style.css">
 </head>
 <body>
@@ -12,7 +13,7 @@
         <div class="header-left">
             <span class="app-logo">🔬</span>
             <h1>FluoFigFactory</h1>
-            <span class="version">v1.4.5 · FluoFigFactory</span>
+            <span class="version">v1.4.6 · FluoFigFactory</span>
         </div>
         <div class="header-right">
             <!-- 导入组 -->
@@ -39,6 +40,11 @@
                     <span class="hdr-ico">↧</span> 导出排版
                 </button>
             </div>
+            <!-- 高级参数开关：一键收起/展开左右侧所有面板 -->
+            <button id="btn-adv-toggle" class="btn-hdr-toggle" aria-pressed="false"
+                    onclick="toggleAdvancedParams()" title="一键收起 / 展开左右侧全部参数面板">
+                <span class="tgl-knob"></span><span id="btn-adv-label">高级参数</span>
+            </button>
         </div>
     </header>
 
@@ -107,7 +113,7 @@
                         </div>
                     </div>
                     <div class="form-group" style="margin-top:6px">
-                        <label>字号 — <span style="font-weight:normal;color:#888">默认自动 (与 bar 长度成比例); 可切手动</span></label>
+                        <label>字号 — <span style="font-weight:normal;color:var(--text-muted)">默认自动 (与 bar 长度成比例); 可切手动</span></label>
                         <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
                             <label style="font-size:12px"><input type="radio" name="scalebar-font-mode" value="auto" checked onchange="onFontSizeModeChange()"> 自动</label>
                             <label style="font-size:12px"><input type="radio" name="scalebar-font-mode" value="manual" onchange="onFontSizeModeChange()"> 手动</label>
@@ -124,8 +130,8 @@
                         <span class="hint-text" id="scalebar-mag-readout">填写后自动换算 1 px = ? μm (Olympus FV3000 UPLXAPO 标定, FOV_10×=1272.792μm)</span>
                     </div>
                     <div class="form-group" id="scalebar-filename-suggestions" style="display:none;margin-top:6px">
-                        <label>文件名识别结果 — <span style="font-weight:normal;color:#888">可一键应用到通道/倍数</span></label>
-                        <div id="scalebar-filename-content" style="background:#f5f7fa;padding:6px;border-radius:4px;font-size:12px"></div>
+                        <label>文件名识别结果 — <span style="font-weight:normal;color:var(--text-muted)">可一键应用到通道/倍数</span></label>
+                        <div id="scalebar-filename-content" style="background:var(--bg-tertiary);padding:6px;border-radius:4px;font-size:12px"></div>
                         <div style="margin-top:4px">
                             <button class="btn btn-sm" onclick="applyFilenameSuggestions()">应用识别结果</button>
                             <button class="btn btn-sm btn-ghost" onclick="dismissFilenameSuggestions()">忽略</button>
@@ -242,7 +248,7 @@
                     <span class="empty-state">使用 ROI 工具在画布上框选，或在下方输入精确尺寸</span>
                 </div>
 
-                <div style="font-size:12px;font-weight:600;color:#3498db;margin-top:8px">ROI 区域尺寸 / 位置（px）</div>
+                <div style="font-size:12px;font-weight:600;color:var(--accent-blue);margin-top:8px">ROI 区域尺寸 / 位置（px）</div>
                 <div class="form-row">
                     <div class="form-group half">
                         <label>X (px)</label>
@@ -392,8 +398,16 @@
 
     <!-- 状态栏 -->
     <footer class="status-bar">
-        <span id="status-text">就绪</span>
-        <span id="cursor-pos">--</span>
+        <div class="status-left">
+            <span id="status-text" class="st-item">就绪</span>
+            <span class="st-sep"></span>
+            <span id="cursor-pos" class="st-item">X -- Y --</span>
+            <span class="st-sep"></span>
+            <span id="zoom-pos" class="st-item">Zoom <b>100%</b></span>
+        </div>
+        <div class="status-right">
+            <span id="status-channels" class="st-item"></span>
+        </div>
     </footer>
 
     <!-- 通道颜色点选模态框 (自动识别不可靠时弹出) -->

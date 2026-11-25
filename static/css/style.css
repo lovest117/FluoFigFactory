@@ -2,53 +2,54 @@
 /* 显微荧光图像排版工具 */
 
 :root {
-    /* 背景层级 */
-    --bg-app: #f4f6f9;
+    /* 背景层级 (中性灰阶, Fluent 浅色) */
+    --bg-app: #f5f5f5;
     --bg-primary: #ffffff;
-    --bg-secondary: #f7f9fb;
-    --bg-tertiary: #eef1f5;
+    --bg-secondary: #fafafa;
+    --bg-tertiary: #f0f0f0;
     --bg-panel: #ffffff;
-    --bg-canvas: #14141f;
+    --bg-canvas: #1f1f1f;
 
     /* 文本 */
-    --text-primary: #1f2a37;
-    --text-secondary: #6b7280;
-    --text-muted: #9aa3af;
-    --text-light: #b7bec9;
+    --text-primary: #1f1f1f;
+    --text-secondary: #616161;
+    --text-muted: #8a8a8a;
+    --text-light: #b3b3b3;
 
     /* 强调色 */
-    --accent-blue: #4b7bec;
-    --accent-blue-hover: #3a68d4;
-    --accent-blue-soft: #eef3fe;
-    --accent-green: #2fb37a;
-    --accent-green-hover: #279a68;
-    --accent-red: #e5484d;
-    --accent-orange: #f5a623;
-    --accent-purple: #8b7cf6;
+    --accent-blue: #0f6cbd;
+    --accent-blue-hover: #115ea3;
+    --accent-blue-soft: #eff6fc;
+    --accent-green: #107c10;
+    --accent-green-hover: #0b6a0b;
+    --accent-red: #c50f1f;
+    --accent-orange: #f7630c;
+    --accent-purple: #5c2e91;
 
     /* 边框 */
-    --border-color: #e6e9ef;
-    --border-strong: #d6dae2;
+    --border-color: #e1e1e1;
+    --border-strong: #d1d1d1;
 
-    /* 阴影 (柔和) */
-    --shadow-xs: 0 1px 2px rgba(24,39,75,0.04);
-    --shadow-sm: 0 1px 3px rgba(24,39,75,0.06), 0 1px 2px rgba(24,39,75,0.04);
-    --shadow-md: 0 4px 12px rgba(24,39,75,0.08);
-    --shadow-lg: 0 8px 24px rgba(24,39,75,0.12);
+    /* 阴影 (Fluent 极浅) */
+    --shadow-xs: 0 1px 2px rgba(0,0,0,0.04);
+    --shadow-sm: 0 1px 2px rgba(0,0,0,0.06), 0 2px 4px rgba(0,0,0,0.04);
+    --shadow-md: 0 4px 8px rgba(0,0,0,0.08);
+    --shadow-lg: 0 8px 16px rgba(0,0,0,0.12);
 
-    /* 圆角 */
-    --radius-xs: 4px;
-    --radius-sm: 6px;
-    --radius-md: 8px;
-    --radius-lg: 12px;
+    /* 圆角 (Fluent 4px 基准) */
+    --radius-xs: 2px;
+    --radius-sm: 4px;
+    --radius-md: 6px;
+    --radius-lg: 6px;
 
-    --sidebar-width: 268px;
+    --sidebar-width: 272px;
+    --ctrl-h: 28px;
 }
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
 body {
-    font-family: -apple-system, "Segoe UI", Roboto, "Helvetica Neue", "PingFang SC", "Microsoft YaHei", Arial, sans-serif;
+    font-family: "Segoe UI Variable Text", -apple-system, "Segoe UI", Roboto, "Helvetica Neue", "PingFang SC", "Microsoft YaHei", Arial, sans-serif;
     background: var(--bg-app);
     color: var(--text-primary);
     display: flex;
@@ -62,8 +63,8 @@ body {
 .app-header {
     background: var(--bg-primary);
     color: var(--text-primary);
-    padding: 0 16px;
-    height: 52px;
+    padding: 0 12px;
+    height: 48px;
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -1010,3 +1011,198 @@ input[type=range]::-moz-range-track { height: 5px; background: var(--bg-tertiary
 .tpl-name { font-size: 11px; font-weight: 600; color: var(--text-primary); margin-top: 4px; line-height: 1.2; }
 .tpl-desc { font-size: 9.5px; color: var(--text-muted); line-height: 1.15; margin-top: 1px; }
 @media (max-width: 1024px) { .template-thumbs { grid-template-columns: repeat(2, 1fr); } }
+
+/* ============================================================
+   UI Refresh — Fluent 浅色对齐 (v1.5, 2026-11-19)
+   参考 Channel Scope Studio 2.1.8 的信息密度：更小控件、更紧间距、
+   通道卡片内联亮度/对比度、状态栏常驻坐标与缩放
+   ============================================================ */
+
+/* ---------- 顶栏紧凑 ---------- */
+.app-logo { width: 28px; height: 28px; font-size: 16px; border-radius: 6px; }
+.header-left { gap: 8px; }
+.header-left h1 { font-size: 14px; letter-spacing: 0.2px; }
+.header-left .version { font-size: 11px; }
+.hdr-group { padding: 3px; border-radius: 6px; gap: 2px; }
+.hdr-group .btn { padding: 0 9px; height: 28px; font-size: 12px; }
+.hdr-ico { font-size: 12px; }
+.hdr-divider { height: 18px; }
+
+/* ---------- 通用按钮 ---------- */
+.btn {
+    height: 32px;
+    padding: 0 12px;
+    font-size: 12.5px;
+    border-radius: var(--radius-sm);
+}
+.btn-sm { height: 26px; padding: 0 9px; font-size: 11.5px; }
+.btn:active { transform: translateY(0.5px); }
+.btn-ghost { background: var(--bg-primary); }
+.btn-ghost:hover { background: var(--bg-tertiary); }
+
+/* ---------- 面板更紧凑 ---------- */
+.sidebar { padding: 8px; gap: 8px; }
+.panel { box-shadow: none; }
+.panel-title {
+    padding: 8px 12px;
+    font-size: 12.5px;
+    background: var(--bg-secondary);
+    border-bottom: 1px solid var(--border-color);
+}
+.panel.collapsed .panel-title { border-bottom-color: transparent; }
+.panel-body { padding: 10px 12px 12px; }
+.panel-body-tools { margin-bottom: 8px; }
+
+/* ---------- 表单控件 28px ---------- */
+.form-group { margin-bottom: 8px; }
+.form-group label { font-size: 11px; margin-bottom: 3px; }
+.form-group input[type="number"],
+.form-group input[type="text"],
+.form-group select,
+.manual-ps input,
+.ch-count-select {
+    padding: 0 8px;
+    height: var(--ctrl-h);
+    font-size: 12px;
+    border-radius: var(--radius-sm);
+}
+.form-group input[type="number"]:focus,
+.form-group input[type="text"]:focus,
+.form-group select:focus {
+    box-shadow: 0 0 0 2px var(--accent-blue-soft);
+}
+.form-grid-2 { gap: 6px 10px; margin-bottom: 8px; }
+.btn-row { margin-top: 6px; gap: 5px; }
+
+/* ---------- 通道卡片 ---------- */
+.channel-list { gap: 6px; }
+.channel-item {
+    padding: 6px 8px;
+    gap: 6px;
+    border-radius: var(--radius-sm);
+    background: var(--bg-primary);
+}
+.channel-item.active {
+    box-shadow: 0 0 0 1px var(--accent-blue) inset;
+}
+.channel-color-dot { width: 18px; height: 18px; border-radius: 3px; }
+.channel-name { font-size: 12.5px; padding: 2px 5px; }
+.channel-toggle { width: 14px; height: 14px; }
+.channel-drag-handle { width: 12px; font-size: 11px; }
+
+/* 通道内联亮度/对比度 */
+.channel-item .channel-levels {
+    flex-basis: 100%;
+    margin-top: 4px;
+    padding-top: 5px;
+    gap: 3px;
+}
+.channel-item .level-row { gap: 5px; }
+.channel-item .level-label { width: 32px; font-size: 10px; white-space: nowrap; }
+.channel-item .level-val {
+    width: 36px;
+    font-size: 10px;
+    font-weight: 500;
+    color: var(--text-secondary);
+    white-space: nowrap;
+}
+.cl-track-tint { position: relative; }
+
+/* ---------- 滑块全局更细 ---------- */
+input[type=range] { height: 4px; }
+input[type=range]::-webkit-slider-thumb { width: 12px; height: 12px; }
+input[type=range]::-moz-range-thumb { width: 12px; height: 12px; }
+input[type=range]::-moz-range-track { height: 4px; }
+
+/* ---------- 画布工具条 ---------- */
+.canvas-toolbar { padding: 6px 10px; gap: 8px; }
+.toolbar-group { padding: 2px; border-radius: 6px; gap: 2px; }
+.toolbar-group > label { font-size: 10.5px; }
+.canvas-toolbar .btn { padding: 0 9px; height: 26px; font-size: 11.5px; }
+#zoom-level { font-size: 11.5px; }
+
+/* ---------- 状态栏 ---------- */
+.status-bar {
+    padding: 4px 12px;
+    gap: 12px;
+    justify-content: flex-start;
+    background: var(--bg-secondary);
+    font-size: 11px;
+}
+.status-left, .status-right {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+}
+.status-right { margin-left: auto; }
+.st-item {
+    font-variant-numeric: tabular-nums;
+    color: var(--text-secondary);
+    white-space: nowrap;
+}
+.st-item b { color: var(--text-primary); font-weight: 600; }
+.st-sep { width: 1px; height: 10px; background: var(--border-strong); flex-shrink: 0; }
+#status-text {
+    max-width: 420px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.st-ch {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    font-size: 10.5px;
+    color: var(--text-secondary);
+}
+.st-ch-dot {
+    width: 7px; height: 7px; border-radius: 2px;
+    display: inline-block;
+    border: 1px solid rgba(0,0,0,0.12);
+}
+.st-ch.off { opacity: 0.35; text-decoration: line-through; }
+
+/* ---------- 顶栏「高级参数」开关 ---------- */
+.btn-hdr-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    height: 28px;
+    padding: 0 10px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    background: var(--bg-primary);
+    color: var(--text-secondary);
+    font-size: 12px;
+    cursor: pointer;
+    transition: background .12s, color .12s, border-color .12s;
+}
+.btn-hdr-toggle:hover { background: var(--bg-tertiary); color: var(--text-primary); }
+.btn-hdr-toggle[aria-pressed="true"] {
+    background: var(--accent-blue-soft);
+    border-color: var(--accent-blue);
+    color: var(--accent-blue);
+}
+.btn-hdr-toggle .tgl-knob {
+    width: 24px; height: 12px; border-radius: 6px;
+    background: var(--border-strong);
+    position: relative;
+    transition: background .15s;
+}
+.btn-hdr-toggle[aria-pressed="true"] .tgl-knob { background: var(--accent-blue); }
+.btn-hdr-toggle .tgl-knob::after {
+    content: '';
+    position: absolute;
+    top: 2px; left: 2px;
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: #fff;
+    transition: transform .15s;
+}
+.btn-hdr-toggle[aria-pressed="true"] .tgl-knob::after { transform: translateX(12px); }
+
+/* ---------- 空状态 ---------- */
+.empty-icon { font-size: 40px; }
+.empty-canvas p { font-size: 13px; }
+.empty-canvas .hint { font-size: 11.5px; }

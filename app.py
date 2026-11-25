@@ -9,6 +9,7 @@ import os
 import sys
 import io
 import re
+import time
 import uuid
 import math
 import base64
@@ -55,6 +56,126 @@ os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 # 当前会话数据: session_id -> dict
 session_data = {}
+
+# ======== 会话生命周期 (M1): 字节预算 + LRU + 导出快照 ========
+# 会话数据全在内存 (numpy 数组), 不设上限时连续导入多组 4096² 图会撑爆进程。
+# 规则:
+#   1) 每个会话记录占用字节与最后访问时间;
+#   2) 总占用超预算 → 从最久未访问的会话开始淘汰, 当前请求的会话永不淘汰;
+#   3) 导出走只读快照 (结构浅拷贝, 数组按引用共享), 渲染在锁外完成, 不阻塞其它请求。
+_SESS_LOCK = threading.RLock()
+SESSION_BUDGET_MB = int(os.environ.get('FLUOFIG_SESSION_BUDGET_MB', '1536'))
+ORPHAN_UPLOAD_TTL_SEC = 3600
+
+
+def _session_bytes(sd):
+    """会话内存占用 (字节): 活跃通道数组 + 被自动忽略但保留可恢复的通道。"""
+    total = 0
+    for arr in sd.get('channels') or []:
+        total += int(getattr(arr, 'nbytes', 0) or 0)
+    for ch in sd.get('dropped') or []:
+        if isinstance(ch, dict):
+            total += int(getattr(ch.get('data'), 'nbytes', 0) or 0)
+    return total
+
+
+def _total_session_bytes():
+    return sum(_session_bytes(sd) for sd in session_data.values())
+
+
+def _touch_session(sid):
+    """刷新 LRU 时间戳; 会话不存在返回 None。"""
+    sd = session_data.get(sid)
+    if sd is not None:
+        sd['_last_access'] = time.time()
+    return sd
+
+
+def _enforce_budget(protect=None):
+    """按 LRU 淘汰会话直到总占用 ≤ 预算。protect 指定的会话不淘汰。
+
+    返回淘汰的会话数。若只剩 protect 一个会话仍超预算, 保留并告警 (不摧毁用户当前工作)。
+    """
+    budget = SESSION_BUDGET_MB * 1024 * 1024
+    evicted = 0
+    with _SESS_LOCK:
+        while _total_session_bytes() > budget:
+            candidates = [(sd.get('_last_access', 0.0), sid)
+                          for sid, sd in session_data.items() if sid != protect]
+            if not candidates:
+                log.warning('会话内存 %.1f MB 超预算 %d MB, 已无可淘汰会话 (保留当前会话)',
+                            _total_session_bytes() / 1048576.0, SESSION_BUDGET_MB)
+                return evicted
+            candidates.sort()
+            _, victim = candidates[0]
+            freed = _session_bytes(session_data[victim])
+            session_data.pop(victim, None)
+            evicted += 1
+            log.info('会话预算: 淘汰 %s (释放 %.1f MB)', victim[:8], freed / 1048576.0)
+    return evicted
+
+
+def _snapshot_session(sid):
+    """返回会话的只读快照, 供长时间渲染 (导出) 使用。
+
+    channels 是 numpy 数组列表 → 浅拷贝列表 (数组按引用共享, 只读);
+    configs / dropped 是 dict 列表 → 逐个浅拷贝, 后续改色阶不会渗进快照。
+    会话不存在返回 None。
+    """
+    with _SESS_LOCK:
+        src = session_data.get(sid)
+        if src is None:
+            return None
+        src['_last_access'] = time.time()
+        return {
+            'channels': list(src['channels']),
+            'configs': [dict(c) for c in src['configs']],
+            'dropped': [dict(c) for c in src.get('dropped') or []],
+            'histograms': src.get('histograms'),
+            'active_count': src.get('active_count'),
+            'metadata': dict(src['metadata']),
+        }
+
+
+def _set_session_pixel_size(sid, value):
+    """把 μm/px 写回真实会话 (导出接口会用前端当前值覆盖后端)。"""
+    with _SESS_LOCK:
+        sd = session_data.get(sid)
+        if sd is None:
+            return None
+        sd['metadata']['pixel_size_um'] = value
+        sd['_last_access'] = time.time()
+        return value
+
+
+def _purge_orphan_uploads(max_age_sec=ORPHAN_UPLOAD_TTL_SEC):
+    """清理 uploads/ 里残留的临时 TIFF (正常路径读后即删, 残留都是异常退出留下的)。
+
+    只在启动时调用; 返回 (删除数, 释放字节)。
+    """
+    now = time.time()
+    removed = 0
+    freed = 0
+    try:
+        names = os.listdir(UPLOAD_FOLDER)
+    except OSError:
+        return 0, 0
+    for name in names:
+        path = os.path.join(UPLOAD_FOLDER, name)
+        try:
+            if not os.path.isfile(path):
+                continue
+            st = os.stat(path)
+            if now - st.st_mtime < max_age_sec:
+                continue
+            os.remove(path)
+            removed += 1
+            freed += st.st_size
+        except OSError:
+            continue
+    if removed:
+        log.info('清理残留上传文件: %d 个, %.1f MB', removed, freed / 1048576.0)
+    return removed, freed
 
 # ======== 通道识别规则 ========
 # 按文件名关键词识别通道 (从 ChannelScope Studio 学来的)
@@ -900,7 +1021,16 @@ def index():
 
 @app.route('/api/health')
 def health():
-    return jsonify({'ok': True, 'version': '1.4.5', 'formats': ['tiff', 'tif']})
+    return jsonify({'ok': True, 'version': '1.4.6', 'formats': ['tiff', 'tif'],
+                    'sessions': len(session_data),
+                    'session_mb': round(_total_session_bytes() / 1048576.0, 1),
+                    'session_budget_mb': SESSION_BUDGET_MB})
+
+
+@app.route('/favicon.ico')
+def favicon():
+    # 无图标，返回 204 避免浏览器控制台 404
+    return ('', 204)
 
 
 @app.route('/api/set_pixel_size', methods=['POST'])
@@ -1198,7 +1328,12 @@ def _process_uploaded_files(file_list, filenames, channel_count=None):
             'filename_meta': filename_meta or {'magnification': None, 'channels': [], 'raw_matches': []},
         }
     }
+    session_data[sid]['_last_access'] = time.time()
+    session_data[sid]['_bytes'] = _session_bytes(session_data[sid])
     log.info(f'Session {sid} created: {len(channel_data)} channels')
+
+    # 会话预算: 新会话优先保留, 从最久未访问的旧会话开始淘汰
+    _enforce_budget(protect=sid)
 
     return {
         'session_id': sid,
@@ -1438,7 +1573,6 @@ def add_scale_bar_api():
     session_id = data.get('session_id')
     if session_id not in session_data:
         return jsonify({'error': '会话不存在'}), 404
-
     sd = session_data[session_id]
     h, w = sd['metadata']['height'], sd['metadata']['width']
 
@@ -1448,8 +1582,9 @@ def add_scale_bar_api():
     pixel_size_um = data.get('pixel_size_um') or sd['metadata'].get('pixel_size_um')
     if pixel_size_um is not None:
         try:
-            sd['metadata']['pixel_size_um'] = float(pixel_size_um)
-            pixel_size_um = sd['metadata']['pixel_size_um']
+            pixel_size_um = float(pixel_size_um)
+            # 写回真实会话; 快照保持只读, 不参与回写
+            _set_session_pixel_size(session_id, pixel_size_um)
         except (TypeError, ValueError):
             pass
     # v1.4.0: 优先用 pt 单位 (Illustrator 习惯); 老字段 (font_size/thickness) 作 fallback 兼容
@@ -1484,7 +1619,6 @@ def line_profile_api():
     session_id = data.get('session_id')
     if session_id not in session_data:
         return jsonify({'error': '会话不存在'}), 404
-
     sd = session_data[session_id]
     x1, y1 = data.get('x1'), data.get('y1')
     x2, y2 = data.get('x2'), data.get('y2')
@@ -1505,7 +1639,6 @@ def pearson_api():
     session_id = data.get('session_id')
     if session_id not in session_data:
         return jsonify({'error': '会话不存在'}), 404
-
     sd = session_data[session_id]
     ch1_idx = data.get('channel1')
     ch2_idx = data.get('channel2')
@@ -1532,7 +1665,6 @@ def roi_preview_api():
     session_id = data.get('session_id')
     if session_id not in session_data:
         return jsonify({'error': '会话不存在'}), 404
-
     sd = session_data[session_id]
     roi = data.get('roi') or {}
     x, y, w, h = int(roi.get('x', 0)), int(roi.get('y', 0)), int(roi.get('width', 0)), int(roi.get('height', 0))
@@ -3199,10 +3331,10 @@ def export_image():
     """导出排版图 - 支持 6 面板布局、Inset Overlay、SVG/PDF 矢量导出"""
     data = request.json or {}
     session_id = data.get('session_id')
-    if session_id not in session_data:
+    # 只读快照: 渲染期间不持锁, 其它请求可继续改色阶/通道
+    sd = _snapshot_session(session_id)
+    if sd is None:
         return jsonify({'error': '会话不存在'}), 404
-
-    sd = session_data[session_id]
     h, w = sd['metadata']['height'], sd['metadata']['width']
     dpi = int(data.get('dpi', 300))
     format_type = data.get('format', 'png').lower()
@@ -3216,8 +3348,9 @@ def export_image():
     pixel_size_um = data.get('pixel_size_um') or sd['metadata'].get('pixel_size_um')
     if pixel_size_um is not None:
         try:
-            sd['metadata']['pixel_size_um'] = float(pixel_size_um)
-            pixel_size_um = sd['metadata']['pixel_size_um']
+            pixel_size_um = float(pixel_size_um)
+            # 写回真实会话; 快照保持只读, 不参与回写
+            _set_session_pixel_size(session_id, pixel_size_um)
         except (TypeError, ValueError):
             pass
 
@@ -3447,10 +3580,10 @@ def export_image():
 def export_single_channel():
     data = request.json or {}
     session_id = data.get('session_id')
-    if session_id not in session_data:
+    # 只读快照: 渲染期间不持锁, 其它请求可继续改色阶/通道
+    sd = _snapshot_session(session_id)
+    if sd is None:
         return jsonify({'error': '会话不存在'}), 404
-
-    sd = session_data[session_id]
     h, w = sd['metadata']['height'], sd['metadata']['width']
     panel_type = data.get('panel_type', 'merge')
     dpi = int(data.get('dpi', 300))
@@ -3462,8 +3595,9 @@ def export_single_channel():
     pixel_size_um = data.get('pixel_size_um') or sd['metadata'].get('pixel_size_um')
     if pixel_size_um is not None:
         try:
-            sd['metadata']['pixel_size_um'] = float(pixel_size_um)
-            pixel_size_um = sd['metadata']['pixel_size_um']
+            pixel_size_um = float(pixel_size_um)
+            # 写回真实会话; 快照保持只读, 不参与回写
+            _set_session_pixel_size(session_id, pixel_size_um)
         except (TypeError, ValueError):
             pass
 
@@ -3537,5 +3671,8 @@ if __name__ == '__main__':
             except Exception as e:
                 log.warning(f'自动打开浏览器失败: {e}')
         threading.Thread(target=_open_browser, daemon=True).start()
+
+    # 启动时清理上次退出留下的临时 TIFF (会话在内存中, 重启后所有上传文件都是孤儿)
+    _purge_orphan_uploads(max_age_sec=0)
 
     app.run(debug=False, host=host, port=port, use_reloader=False)
